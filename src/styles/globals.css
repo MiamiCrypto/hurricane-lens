@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+/* Fix for Leaflet controls and popups */
+.leaflet-popup,
+.leaflet-tooltip {
+  z-index: 900 !important;
+}
+
+.leaflet-pane {
+  z-index: 400 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 900 !important;
+}
+
+/* Fix for dropdown positioning */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* Card styling */
+.bg-card {
+  @apply bg-white;
+}
+
+.text-card-foreground {
+  @apply text-gray-900;
+}
+
+/* Improved focus styling for interactive elements */
+.focus-visible\:ring:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-blue-500;
+} 
