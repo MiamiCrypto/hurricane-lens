@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { useStormStore } from "@/hooks/useStormStore"
 import { catColor } from "@/utils/catColor"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { PlotData, Layout, Config } from "plotly.js"
 
 // Dynamically import Plot with no SSR
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false })
@@ -14,8 +14,10 @@ interface StormTrack {
   name: string
   dates: string[]
   winds: number[]
+  pressures: number[]
   colors: string[]
   maxWind: number
+  displayName: string
 }
 
 export default function IntensityChart() {
@@ -32,8 +34,9 @@ export default function IntensityChart() {
   useEffect(() => {
     // Filter storms by selected year
     const stormsByYear = storms.filter(storm => {
-      const stormDate = new Date(storm.DateTime)
-      return stormDate.getFullYear() === year
+      if (!storm.DateTime) return false;
+      const stormDate = new Date(storm.DateTime);
+      return stormDate.getFullYear() === year;
     })
 
     // Group by storm name and cyclone number
@@ -47,7 +50,7 @@ export default function IntensityChart() {
     // Create track data for each storm
     const tracks = Object.entries(stormGroups).map(([id, points]) => {
       // Sort points by date
-      points.sort((a, b) => new Date(a.DateTime).getTime() - new Date(b.DateTime).getTime())
+      points.sort((a, b) => new Date(a.DateTime || "").getTime() - new Date(b.DateTime || "").getTime())
       
       // Find max wind speed
       const maxWind = Math.max(...points.map(p => p.MaxWind_kt || 0))
@@ -55,9 +58,11 @@ export default function IntensityChart() {
       // Extract date and wind data
       const track: StormTrack = {
         id,
-        name: `${points[0].StormName || 'Unnamed'} – #${points[0].CycloneNum} (${maxWind} kt)`,
-        dates: points.map(p => p.DateTime),
+        name: points[0].displayName || `${points[0].StormName || 'Unnamed'} (${points[0].CycloneNum})`,
+        displayName: points[0].displayName || `${points[0].StormName || 'Unnamed'} (${points[0].CycloneNum})`,
+        dates: points.map(p => p.DateTime || ""),
         winds: points.map(p => p.MaxWind_kt || 0),
+        pressures: points.map(p => p.MinPressure_mb || null).filter(Boolean) as number[],
         colors: points.map(p => catColor(p.MaxWind_kt || 0)),
         maxWind
       }
@@ -70,79 +75,154 @@ export default function IntensityChart() {
 
   if (!isMounted) {
     return (
-      <Card className="h-[500px] w-full rounded-2xl shadow-md">
-        <CardContent className="flex items-center justify-center h-full">
-          <p className="text-gray-500">Loading chart...</p>
-        </CardContent>
-      </Card>
+      <div className="h-full flex items-center justify-center">
+        <p className="text-gray-500">Loading chart...</p>
+      </div>
     )
   }
 
   if (!stormTracks.length) {
     return (
-      <Card className="h-[500px] w-full rounded-2xl shadow-md">
-        <CardContent className="flex items-center justify-center h-full">
-          <p className="text-gray-500">No storm data available for {year}</p>
-        </CardContent>
-      </Card>
+      <div className="h-full flex items-center justify-center">
+        <p className="text-gray-500">No storm data available for {year}</p>
+      </div>
     )
   }
 
-  // Filter tracks by selected storm if applicable
-  const filteredTracks = selectedStormId
-    ? stormTracks.filter(track => track.id === selectedStormId)
-    : stormTracks
+  // If no storm is selected, show a placeholder
+  if (selectedStormId === null) {
+    return (
+      <div className="h-full flex items-center justify-center flex-col">
+        <p className="text-gray-500 text-lg mb-2">Select a storm to view its wind & pressure history</p>
+        <p className="text-gray-400 text-sm">Use the dropdown above to choose a specific storm</p>
+      </div>
+    )
+  }
 
-  // Create plot data
-  const plotData = filteredTracks.map(track => ({
-    type: "scatter",
-    mode: "lines+markers",
-    x: track.dates.map(date => new Date(date)),
-    y: track.winds,
-    name: track.name,
-    line: { 
-      color: track.colors[Math.floor(track.colors.length / 2)] || "#000",
-      width: selectedStormId === track.id ? 2 : 1.5,
-      opacity: selectedStormId === track.id ? 1 : 0.75
+  // Find the selected storm
+  const selectedStorm = stormTracks.find(track => track.id === selectedStormId);
+  
+  if (!selectedStorm) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-gray-500">Selected storm data not found</p>
+      </div>
+    )
+  }
+
+  // Create plot data for the selected storm only
+  const plotData: Partial<PlotData>[] = [
+    // Wind data
+    {
+      type: "scatter",
+      mode: "lines+markers",
+      x: selectedStorm.dates.map(date => new Date(date)),
+      y: selectedStorm.winds,
+      name: "Wind (kt)",
+      line: { 
+        color: selectedStorm.colors[Math.floor(selectedStorm.colors.length / 2)] || "#000",
+        width: 2
+      },
+      marker: { 
+        color: selectedStorm.colors,
+        size: 6
+      }
+    } as Partial<PlotData>
+  ];
+  
+  // Add pressure data if available
+  if (selectedStorm.pressures.length > 0) {
+    plotData.push({
+      type: "scatter",
+      mode: "lines",
+      x: selectedStorm.dates.map(date => new Date(date)),
+      y: selectedStorm.pressures,
+      name: "Pressure (mb)",
+      yaxis: "y2",
+      line: { 
+        color: "red",
+        width: 2,
+        dash: "dash"
+      },
+      marker: { 
+        color: "red",
+        size: 4
+      }
+    } as Partial<PlotData>);
+  }
+
+  const layout: Partial<Layout> = {
+    title: {
+      text: `${selectedStorm.displayName} – intensity vs. time`,
+      font: { size: 11 }
     },
-    marker: { 
-      color: track.colors,
-      size: selectedStormId === track.id ? 5 : 4,
-      opacity: selectedStormId === track.id ? 1 : 0.75
+    autosize: true,
+    height: 250,
+    margin: { l: 40, r: 40, t: 30, b: 80 },
+    xaxis: { 
+      title: {
+        text: "",
+        font: { size: 10 }
+      },
+      tickformat: "%b %d",
+      tickfont: { size: 9 }
+    },
+    yaxis: { 
+      title: {
+        text: "Wind Speed (kt)",
+        font: { size: 10 }
+      },
+      zeroline: false,
+      gridcolor: "#f0f0f0",
+      tickfont: { size: 9 },
+      range: [0, Math.max(120, selectedStorm.maxWind * 1.1)] // Set reasonable range based on max wind
+    },
+    yaxis2: {
+      title: {
+        text: "Pressure (mb)",
+        font: { size: 10 }
+      },
+      overlaying: "y",
+      side: "right",
+      showgrid: false,
+      zeroline: false,
+      tickfont: { size: 9 },
+      range: [
+        Math.min(950, Math.min(...selectedStorm.pressures) - 10),
+        Math.max(1020, Math.max(...selectedStorm.pressures) + 10)
+      ]
+    },
+    hovermode: "closest",
+    showlegend: true,
+    legend: { 
+      orientation: 'h',
+      y: -0.2,
+      x: 0.5,
+      xanchor: "center",
+      yanchor: "top",
+      font: { size: 9 }
+    },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: {
+      size: 10
     }
-  }))
+  };
+
+  const config: Partial<Config> = {
+    responsive: true,
+    displayModeBar: false
+  };
 
   return (
-    <Card className="h-[500px] w-full rounded-2xl shadow-md">
-      <CardContent className="p-0 h-full">
-        <Plot
-          data={plotData}
-          layout={{
-            title: "Wind Intensity",
-            autosize: true,
-            margin: { l: 50, r: 20, t: 40, b: 50 },
-            xaxis: { title: "Date" },
-            yaxis: { 
-              title: "Maximum Wind Speed (kt)",
-              zeroline: false,
-              gridcolor: "#f0f0f0",
-            },
-            hovermode: "closest",
-            showlegend: true,
-            legend: { 
-              x: 0, 
-              y: 1.1,
-              orientation: "h",
-              font: { size: 10 },
-              traceorder: 'normal',
-              itemsizing: 'constant'
-            }
-          }}
-          useResizeHandler={true}
-          style={{ width: "100%", height: "100%" }}
-          config={{ responsive: true }}
-        />
-      </CardContent>
-    </Card>
+    <div className="h-full">
+      <Plot
+        data={plotData}
+        layout={layout}
+        config={config}
+        useResizeHandler={true}
+        style={{ width: "100%", height: "100%" }}
+      />
+    </div>
   )
 } 

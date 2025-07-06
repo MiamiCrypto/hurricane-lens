@@ -58,11 +58,6 @@ export default function LeafletMap({ storms, selectedStormId }: LeafletMapProps)
       
       {/* Draw polylines for storm tracks */}
       {Object.entries(stormGroups).map(([stormId, points]) => {
-        // Skip if this isn't the selected storm (when a storm is selected)
-        if (selectedStormId !== null && stormId !== selectedStormId) {
-          return null
-        }
-        
         // Get coordinates for polyline
         const positions = points
           .filter(p => p.Latitude && p.Longitude)
@@ -75,14 +70,16 @@ export default function LeafletMap({ storms, selectedStormId }: LeafletMapProps)
         // Skip if no valid positions
         if (positions.length < 2) return null
         
+        const isSelectedStorm = selectedStormId === stormId
+        
         return (
           <Polyline
             key={`path-${stormId}`}
             positions={positions as [number, number][]}
             pathOptions={{
               color: lineColor,
-              weight: selectedStormId === stormId ? 4 : 2,
-              opacity: selectedStormId === stormId ? 1 : 0.5
+              weight: isSelectedStorm ? 4 : 3,
+              opacity: selectedStormId === null ? 1 : (isSelectedStorm ? 1 : 0.3)
             }}
           />
         )
@@ -93,33 +90,45 @@ export default function LeafletMap({ storms, selectedStormId }: LeafletMapProps)
         // Check if storm has valid coordinates
         if (!storm.Latitude || !storm.Longitude) return null
         
-        // Skip if this isn't the selected storm (when a storm is selected)
+        // Determine if this is the selected storm
         const stormId = `${storm.StormName}-${storm.CycloneNum}`
-        if (selectedStormId !== null && stormId !== selectedStormId) {
-          return null
-        }
+        const isSelectedStorm = selectedStormId === stormId
         
         const windSpeed = storm.MaxWind_kt || 0
         const stormColor = catColor(windSpeed)
-        const stormRadius = Math.max(3, Math.min(10, windSpeed / 10)) // Scale radius between 3-10px
         
         return (
           <CircleMarker
             key={`${storm.StormName || "Unknown"}-${index}`}
             center={[storm.Latitude, storm.Longitude]}
-            radius={selectedStormId === stormId ? stormRadius * 1.5 : stormRadius}
+            radius={isSelectedStorm ? 6 : 4}
+            eventHandlers={{
+              mouseover: (e) => {
+                e.target.setStyle({
+                  radius: isSelectedStorm ? 8 : 6,
+                  fillOpacity: 1
+                });
+              },
+              mouseout: (e) => {
+                e.target.setStyle({
+                  radius: isSelectedStorm ? 6 : 4,
+                  fillOpacity: selectedStormId === null ? 1 : (isSelectedStorm ? 1 : 0.3)
+                });
+              }
+            }}
             pathOptions={{ 
               fillColor: stormColor, 
-              color: "white",
-              weight: selectedStormId === stormId ? 2 : 1,
-              fillOpacity: selectedStormId === stormId ? 0.9 : 0.6,
-              opacity: selectedStormId === stormId ? 1 : 0.25
+              color: stormColor,
+              weight: 1,
+              fillOpacity: 1,
+              opacity: selectedStormId === null ? 1 : (isSelectedStorm ? 1 : 0.3)
             }}
           >
             <Tooltip>
-              <strong>{storm.StormName || "Unnamed"} – #{storm.CycloneNum}</strong><br />
+              <strong>{storm.displayName || `${storm.StormName || "Unnamed"} (${storm.CycloneNum})`}</strong><br />
               {new Date(storm.DateTime).toLocaleDateString()}<br />
               <span className="font-medium">Wind: {windSpeed} kt</span>
+              {storm.MinPressure_mb && <span className="block">Pressure: {storm.MinPressure_mb} mb</span>}
             </Tooltip>
           </CircleMarker>
         )

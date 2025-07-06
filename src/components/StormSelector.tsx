@@ -23,47 +23,43 @@ export default function StormSelector() {
   useEffect(() => {
     // Filter storms by the selected year
     const stormsByYear = storms.filter(storm => {
-      const stormDate = new Date(storm.DateTime)
-      return stormDate.getFullYear() === year
+      if (!storm.DateTime) return false;
+      const stormDate = new Date(storm.DateTime);
+      return stormDate.getFullYear() === year;
     })
 
     // Group by storm name and cyclone number to get unique storms
     const uniqueStorms = stormsByYear.reduce((acc: Record<string, any>, storm) => {
       const key = `${storm.StormName}-${storm.CycloneNum}`
       if (!acc[key]) {
-        // Find max wind speed for this storm
-        const maxWind = Math.max(
-          ...(stormsByYear
-            .filter(s => s.StormName === storm.StormName && s.CycloneNum === storm.CycloneNum)
-            .map(s => s.MaxWind_kt || 0))
-        )
-        
         acc[key] = {
           id: key,
           stormName: storm.StormName,
           cycloneNum: storm.CycloneNum,
-          maxWind: maxWind
+          displayName: storm.displayName
         }
       }
       return acc
     }, {})
 
-    // Convert to array and sort by cyclone number, then storm name
+    // Convert to array and sort alphabetically by storm name, then by cyclone number
     const options: StormOption[] = Object.values(uniqueStorms)
       .map((storm: any) => ({
         id: storm.id,
-        label: `${storm.stormName || 'Unnamed'} – #${storm.cycloneNum} (${storm.maxWind} kt)`
+        label: storm.displayName
       }))
       .sort((a, b) => {
-        // Extract cyclone numbers for sorting
-        const numA = parseInt(a.id.split('-')[1]) || 0
-        const numB = parseInt(b.id.split('-')[1]) || 0
+        // Extract storm names for sorting
+        const nameA = a.id.split('-')[0] || "";
+        const nameB = b.id.split('-')[0] || "";
         
-        // Sort by cyclone number first
-        if (numA !== numB) return numA - numB
+        // Sort by name first
+        if (nameA !== nameB) return nameA.localeCompare(nameB);
         
-        // Then sort by name
-        return a.label.localeCompare(b.label)
+        // Then sort by cyclone number
+        const numA = parseInt(a.id.split('-')[1]) || 0;
+        const numB = parseInt(b.id.split('-')[1]) || 0;
+        return numA - numB;
       })
 
     // Add "All Storms" option at the beginning
@@ -82,16 +78,13 @@ export default function StormSelector() {
   }
 
   return (
-    <div className="w-64 relative z-20">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Select Storm
-      </label>
+    <div className="relative z-30">
       <Select
         value={selectedStormId || "all"}
         onValueChange={handleSelectChange}
       >
-        <SelectTrigger className="w-full focus-visible:ring ring-offset-2">
-          <SelectValue placeholder="Select a storm" />
+        <SelectTrigger className="w-full focus-visible:ring ring-offset-2 text-white bg-slate-900 focus:ring-0">
+          <SelectValue placeholder="All Storms" />
         </SelectTrigger>
         <SelectContent portal={false}>
           {stormOptions.map((option) => (

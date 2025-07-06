@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 
-export interface StormRow { [k: string]: any }
+export interface StormRow { 
+  [k: string]: any;
+  StormName?: string;
+  CycloneNum?: number;
+  MaxWind_kt?: number;
+  MinPressure_mb?: number;
+  DateTime?: string;
+  displayName?: string;
+  Category?: number;
+}
 
 interface StormState {
   storms: StormRow[]
