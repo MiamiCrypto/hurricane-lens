@@ -1,0 +1,6 @@
+[build]
+command = "pnpm run build"
+publish = ".next/standalone"
+
+[build.environment]
+NODE_VERSION = "20" 
